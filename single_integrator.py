@@ -1,16 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import utils.nlp as nlp
-import utils.dynamics as dynamics
-import utils.cost_functions as cost_functions
-import utils.constraints as constraints
-import utils.simulate as simulate
-import utils.measurements as measurements
-import pdb
+import nlp.nlp as nlp
+import nlp.dynamics as dynamics
+import nlp.cost_functions as cost_functions
 
 # Time horizon
 T = 10.
-N = 30
+N = 10
 n = 2
 m = 2
 
@@ -21,7 +17,7 @@ X = problem.addVariables(N+1, 2, name='x')
 U = problem.addVariables(N+1, 2, name='u')
 
 # Define system dynamics
-problem.addDynamics(dynamics.single_integrator, X, U)
+problem.addDynamics(dynamics.single_integrator_2D, X, U)
 
 # Define cost function
 problem.addStageCost(cost_functions.single_integrator, X, U)

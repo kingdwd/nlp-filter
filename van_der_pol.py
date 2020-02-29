@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import utils.nlp as nlp
-import utils.dynamics as dynamics
-import utils.cost_functions as cost_functions
-import utils.constraints as constraints
+import nlp.nlp as nlp
+import nlp.dynamics as dynamics
+import nlp.cost_functions as cost_functions
+import nlp.constraints as constraints
 
 
 # Time horizon
@@ -17,11 +17,11 @@ problem = nlp.fixedTimeOptimalControlNLP(N, T, n, m)
 # Define variables
 x_lb = [-np.inf, -0.25]
 x_ub = [np.inf, np.inf]
-X = problem.addVariables(N+1, 2, x_lb, x_ub, 'x')
+X = problem.addVariables(N+1, 2, x_lb, x_ub, name='x')
 
 u_lb = [-1.0]
 u_ub = [1.0]
-U = problem.addVariables(N+1, 1, u_lb, u_ub, 'u')
+U = problem.addVariables(N+1, 1, u_lb, u_ub, name='u')
 
 # Define system dynamics
 problem.addDynamics(dynamics.van_der_pol, X, U)
