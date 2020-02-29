@@ -99,7 +99,6 @@ def enu2ecef(p_ENU, p_ref_ECEF):
     return np.matmul(R, p_ENU) + p_ref_ECEF
 
 
-
 if __name__ == '__main__':
     x = -2.7002e6
     y = -4.2928e6

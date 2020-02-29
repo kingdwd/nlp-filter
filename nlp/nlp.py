@@ -58,14 +58,15 @@ class NLP(object):
         s_opts = {}
         self.opti.solver("ipopt", p_opts, s_opts)
 
-    def solve(self, w0=None, warmstart=False):
+    def initialGuess(self, x, x0):
+        """ Accepts x as a casadi variable returned by addVariables
+        and x0 is an array initial guess for that value """
+        self.opti.set_initial(x, x0)
+
+    def solve(self, warmstart=False):
         if warmstart and self.sol is not None:
             print('Warmstarting with previous solution')
             self.opti.set_initial(self.sol.value_variables())
-
-        elif w0 is not None:
-            print('Using provided initial guesses')
-            print('Still needs to be implemented')
 
         # Solve the NLP
         self.sol = self.opti.solve()
@@ -238,3 +239,19 @@ class fixedTimeOptimalEstimationNLP(NLP):
             # Then add to the cost
             r_t = residual(X_t, y_array[:,i])
             self.J += casadi.mtimes(r_t.T, casadi.mtimes(R, r_t))
+
+    def initializeEstimate(self, X, t_array, xhat_array):
+        """ Takes an solution characterized by t_array (T,) and
+        xhat_array (n, T) and interpolates to initialize the 
+        NLP solver """
+
+        # Get time points of the collocation nodes
+        t_nodes = self.CPM.tau2t(self.CPM.tau)
+
+        # Interpolate xhat at these nodes
+        interp = interp1d(t_array, xhat_array, fill_value="extrapolate")
+        xhat_nodes = interp(t_nodes)
+
+        # Initialize estimate
+        for (i, x) in enumerate(X):
+            self.initialGuess(x, xhat_nodes[:,i])

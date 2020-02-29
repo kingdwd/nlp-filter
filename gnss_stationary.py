@@ -10,7 +10,6 @@ import utils.gnss as gnss
 import utils.utils as utils
 import utils.ekf as ekf
 import utils.data as data_utils
-import pdb
 
 Q = np.diag([0.0001, 0.0001, 0.0001, 0.1, 0.001]) # covariance for dynamics
 r_pr = 100 # covariance for pseudorange measurement
@@ -27,33 +26,13 @@ dt = 1
 T = 50
 t = np.linspace(0, T, T + 1)
 u = np.zeros((3, T + 1))
-
-# sat_data = loadmat('../data/onyx/gnss_log_2020_02_05_09_14_15onyxsatposecef.mat')
-# sat_pos = sat_data["svPoss"][1:,:,:3] # ECEF coordinates (meters)
-# ion_correction = sat_data["svPoss"][1:,:,3] # meters
-# sat_clock_bias = sat_data["svPoss"][1:,:,4] # seconds
-
-# # Load data and correct for ionosphere and satellite clock bias
-# pr_data = loadmat('../data/onyx/gnss_log_2020_02_05_09_14_15onyxranges.mat')
-# pr = pr_data["pseudoranges"][1:,:] + ion_correction + C*sat_clock_bias
-# sats = pr_data["pseudoranges"][0,:]
-
-data = data_utils.load_gnss_logs('/home/jlorenze/courses/aa272c/project/data/onyx/gnss_log_2020_02_05_09_14_15onyx')
+data = data_utils.load_gnss_logs('./data/gnss_stationary/gnss_log_2020_02_05_09_14_15')
 
 # Compute iterative least squares solutions
 LS = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
       "x_ENU":np.zeros(T+1), "y_ENU":np.zeros(T+1), "z_ENU":np.zeros(T+1),
       "lat":np.zeros(T+1), "lon":np.zeros(T+1), "h":np.zeros(T+1)}
-# p = pr.shape[1]
 for k in range(T+1):
-    # # Only take measurements that are not NaN
-    # sat_pos_k = np.array([]).reshape(0,3)
-    # pr_k = np.array([])
-    # for i in range(p):
-    #     if not np.all(sat_pos[k,i,:] == 0.0) and not np.isnan(pr[k,i]):
-    #         sat_pos_k = np.vstack((sat_pos_k, sat_pos[k,i,:].reshape((1,3))))
-    #         pr_k = np.hstack((pr_k, pr[k,i]))
-
     # Solve least squares
     p_ECEF, b = gnss.iterativeLeastSquares(data["sat_pos"][k], data["pr"][k])
     p_ENU = utils.ecef2enu(p_ECEF, p_ref_ECEF)
@@ -86,7 +65,6 @@ LS_batch = {"t":t, "p_ref_ECEF":p_ref_ECEF,
 
 
 # Compute using EKF
-# Data storage dictionary
 EKF = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
       "x_ENU":np.zeros(T+1), "y_ENU":np.zeros(T+1), "z_ENU":np.zeros(T+1),
       "lat":np.zeros(T+1), "lon":np.zeros(T+1), "h":np.zeros(T+1)}
@@ -114,16 +92,21 @@ for k in range(T+1):
     R = np.diag(r_pr*np.ones(data["pr"][k].shape[0]))
     ekf_filter.update(u[:,k], data["pr"][k], Q, R, dyn_func_params={"dt":dt}, meas_func_params={"sat_pos":sat_pos_k})
 
-# TODO: initialize optimizer
 # Time horizon
 N = 10
-n = 5
+n = 5 # state is x = [x, y, z, b, bd]
 m = 3
 
 problem = nlp.fixedTimeOptimalEstimationNLP(N, T, n, m)
 
 # Define variables
 X = problem.addVariables(N+1, n, name='x')
+xhat0 = np.vstack((EKF["x_ENU"].reshape(1,-1),
+                   EKF["y_ENU"].reshape(1,-1),
+                   EKF["z_ENU"].reshape(1,-1),
+                   EKF["bias"].reshape(1,-1),
+                   bias_rate_guess*np.ones((1,len(t)))))
+problem.initializeEstimate(X, t, xhat0)
 
 # Define system dynamics
 problem.addDynamics(dynamics.gnss_pos_and_bias, X, t, u, np.linalg.inv(Q))
@@ -144,6 +127,7 @@ problem.build()
 
 print('Solving problem.')
 problem.solve()
+problem.solve(warmstart=True)
 
 NLP = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
       "x_ENU":np.zeros(T+1), "y_ENU":np.zeros(T+1), "z_ENU":np.zeros(T+1),
@@ -160,9 +144,6 @@ for k in range(T+1):
     NLP["lon"][k] = p_LLA[0]
     NLP["h"][k] = p_LLA[0]
     NLP["bias"][k] = x_opt[k,3]
-
-
-
 
 
 # Plotting
@@ -193,11 +174,6 @@ plt.xlabel('t (s)')
 plt.ylabel('y (m)')
 plt.legend()
 
-# plt.figure(4)
-# plt.plot(LS["t"], LS["bias"], c='r', label='LS')
-# plt.plot(EKF["t"], EKF["bias"], c='g', label='EKF')
-# plt.plot(NLP["t"], NLP["bias"], c='b', label='NLP')
-# plt.legend()
 plt.show()
 
 
