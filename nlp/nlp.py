@@ -11,15 +11,11 @@ class NLP(object):
         self.N = N
         self.var_names = [] # array holding variable names in order generated
         self.var_sizes = [] # array holding variable dimensions
-        self.w = [] # the decision variables lbw < w < ubw
-        self.lbw = [] # lower bound constraint on dec var
-        self.ubw = [] # upper bound constraint on dec var
-        self.g = [] # vector for constraints lbg < g(w,p) < ubg
-        self.lbg = [] # lower bound on constraints
-        self.ubg = [] # upper bound on constraints
-        self.w0 = [] # initial guess of decision variables
+        self.w = {} # the decision variables
+        self.opti = casadi.Opti()
+        self.sol = None
 
-    def addVariables(self, N_var, n_var, lb=None, ub=None, w0=None, name='x'):
+    def addVariables(self, N_var, n_var, lb=None, ub=None, name='x'):
         """ Builds N_var symbolic vectors of dimension n,
         names the vectors 'name_j'. Returns python list
         of the vectors. Parameters lb and ub are vectors of length
@@ -29,50 +25,66 @@ class NLP(object):
             var_name = name + '_' + str(i)
             self.var_names.append(var_name)
             self.var_sizes.append(n_var)
-            x = casadi.MX.sym(var_name, n_var)
+            x = self.opti.variable(n_var)
+            self.w[var_name] = x
             X.append(x)
 
-            # Add these variables to the internal global list of problem variables
-            self.w.append(x)
-            if lb is None:
-                self.lbw += [-np.inf]*n_var
-            else:
-                self.lbw += lb
-            if ub is None:
-                self.ubw += [np.inf]*n_var
-            else:
-                self.ubw += ub
-            if w0 is None:
-                self.w0 += [0]*n_var
-            else:
-                self.w0 += w0
+            if lb is not None:
+                self.opti.subject_to(x >= lb)
+            if ub is not None:
+                self.opti.subject_to(x <= ub)
+
         return X
 
-    def build(self):
+    def addParameter(self, N_var, n_var, val=None):
+        P = []
+        for i in range(N_var):
+            p = self.opti.parameter(n_var)
+            P.append(p)
+
+            if val is not None:
+                self.setParameter(p, val)
+
+        return P
+
+    def setParameter(self, p, val):
+        self.opti.set_value(p, val)
+
+    def build(self, verbose=True):
+        self.opti.minimize(self.J)
+
         # Create an NLP solver
-        prob = {'f': self.J, 'x': casadi.vertcat(*self.w), 'g': casadi.vertcat(*self.g)}
-        self.solver = casadi.nlpsol('solver', 'ipopt', prob);
+        p_opts = {"ipopt.print_level":0}
+        s_opts = {}
+        self.opti.solver("ipopt", p_opts, s_opts)
 
-    def solve(self):
-        print('Not using initial guesses')
+    def initialGuess(self, x, x0):
+        """ Accepts x as a casadi variable returned by addVariables
+        and x0 is an array initial guess for that value """
+        self.opti.set_initial(x, x0)
+
+    def solve(self, warmstart=False):
+        if warmstart and self.sol is not None:
+            print('Warmstarting with previous solution')
+            self.opti.set_initial(self.sol.value_variables())
+
         # Solve the NLP
-        sol = self.solver(x0=self.w0, lbx=self.lbw, ubx=self.ubw, lbg=self.lbg, ubg=self.ubg)
-        self.w_opt = sol['x'].full().flatten()
+        self.sol = self.opti.solve()
+        self.solver = self.sol.stats()
 
-    def extractVariableValue(self, name, idx):
+    def extractVariableValue(self, name, idx=0):
         """ From solver solution, extract the value of the decision
         variable given by 'name_idx' """
-        var = None
-        for (i, var_name) in enumerate(self.var_names):
-            if var_name == name + '_' + str(idx):
-                j = sum(self.var_sizes[:i])
-                var = self.w_opt[j:j+self.var_sizes[i]]
-
-        if var is None:
+        var_name = name + '_' + str(idx)
+        if var_name in self.w.keys():
+            if self.sol is not None:
+                return np.array(self.sol.value(self.w[var_name])).reshape(-1)
+            else:
+                print('Need to run solve() first')
+                return None
+        else:
             print('Could not find ' + name + '_' + str(idx) + '.')
             return None
-        else:
-            return var
 
     def extractSolution(self, name, t_array):
         """ From solver solution, extracts all variables with 'name'
@@ -131,11 +143,10 @@ class fixedTimeOptimalControlNLP(NLP):
             d_k = 0
             for j in range(self.N + 1):
                 d_k += self.CPM.D[k, j]*X[j]
-            # Append collocation equations to constraint dynamics
-            self.g += [fdynamics(X[k], U[k]) - (2.0/self.T)*d_k]
-            self.lbg += [0]*self.n
-            self.ubg += [0]*self.n
 
+            # Append collocation equations to constraint dynamics
+            self.opti.subject_to(fdynamics(X[k], U[k]) == (2.0/self.T)*d_k)
+            
     def addStageCost(self, func, X, U, params=None):
         # Define Casadi function
         x = casadi.MX.sym('x', self.n)
@@ -150,26 +161,19 @@ class fixedTimeOptimalControlNLP(NLP):
         """ Adds a constraint g(vars) = 0
         vars is a list of Casadi variables, in order to pass to func 
         func must output a single scalar quantity g(vars) = 0! """
-        if params is not None:
-            self.g += [func(variables, params)]
-        else:
-            self.g += [func(variables)]
-        self.lbg += [0]
-        self.ubg += [0]
+        self.opti.subject_to(func(variables, params) == 0)
 
     def addInitialCondition(self, x0, values):
         """ Sets the initial condition
         x0 is the first state variable (since CPM method has both endpoints in collocation nodes)
         value is the vector initial condition value to set """
-        for (i, val) in enumerate(values):
-            self.addSingleConstraint(constraints.equalityConstaint, x0[i], val)
+        self.opti.subject_to(x0 == values)
 
     def addTerminalCondition(self, xT, values):
         """ Sets the terminal condition
         xT is the last state variable (since CPM method has both endpoints in collocation nodes)
         value is the vector initial condition value to set """
-        for (i, val) in enumerate(values):
-            self.addSingleConstraint(constraints.equalityConstaint, xT[i], val)
+        self.opti.subject_to(xT == values)
 
 
 class fixedTimeOptimalEstimationNLP(NLP):
@@ -193,20 +197,16 @@ class fixedTimeOptimalEstimationNLP(NLP):
         if len(X) != self.N + 1:
             print('X must have N+1 points defined.')
 
-        # Size of the state and input
-        n = X[0].shape[0]
-        m = u_array.shape[0]
-
         # Define a Casadi function
-        xvar = casadi.MX.sym('x', n)
-        uvar = casadi.MX.sym('u', m)
+        xvar = casadi.MX.sym('x', self.n)
+        uvar = casadi.MX.sym('u', self.m)
         fdynamics = casadi.Function('f', [xvar, uvar], [func(xvar, uvar, params)])
 
         # Define interpolation function for the control u
         u_t = interp1d(t_array, u_array, fill_value="extrapolate")
 
         # Define process noise variables
-        W = self.addVariables(self.N + 1, n, name='w')
+        W = self.addVariables(self.N + 1, self.n, name='w')
         
         # Add dynamics constraints at each collocation point
         for k in range(self.N + 1):
@@ -215,9 +215,7 @@ class fixedTimeOptimalEstimationNLP(NLP):
             for j in range(self.N + 1):
                 d_k += self.CPM.D[k, j]*X[j]
             # Append collocation equations to constraint dynamics
-            self.g += [W[k] + fdynamics(X[k], u_t(self.CPM.tau2t(self.CPM.tau[k]))) - (2.0/self.T)*d_k]
-            self.lbg += [0]*self.n
-            self.ubg += [0]*self.n
+            self.opti.subject_to(W[k] + fdynamics(X[k], u_t(self.CPM.tau2t(self.CPM.tau[k]))) == (2.0/self.T)*d_k)
 
             # Weight process noise variables with w^T*Q*w
             self.J += casadi.mtimes(W[k].T, casadi.mtimes(Q, W[k]))
@@ -241,3 +239,19 @@ class fixedTimeOptimalEstimationNLP(NLP):
             # Then add to the cost
             r_t = residual(X_t, y_array[:,i])
             self.J += casadi.mtimes(r_t.T, casadi.mtimes(R, r_t))
+
+    def initializeEstimate(self, X, t_array, xhat_array):
+        """ Takes an solution characterized by t_array (T,) and
+        xhat_array (n, T) and interpolates to initialize the 
+        NLP solver """
+
+        # Get time points of the collocation nodes
+        t_nodes = self.CPM.tau2t(self.CPM.tau)
+
+        # Interpolate xhat at these nodes
+        interp = interp1d(t_array, xhat_array, fill_value="extrapolate")
+        xhat_nodes = interp(t_nodes)
+
+        # Initialize estimate
+        for (i, x) in enumerate(X):
+            self.initialGuess(x, xhat_nodes[:,i])
