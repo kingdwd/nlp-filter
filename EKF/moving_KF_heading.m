@@ -1,4 +1,4 @@
-function [x_ip1_g_ip1, P_ip1_g_ip1] = Stationary_KF_heading(x_i_g_i, P_i_g_i, pseudoranges1, pseudoranges2, sat_pos_t1, sat_pos_t2, range,Q,R,dt, theta)
+function [x_ip1_g_ip1, P_ip1_g_ip1] = moving_KF_heading(x_i_g_i, P_i_g_i, pseudoranges1, pseudoranges2, sat_pos_t1, sat_pos_t2, range,Q,R,dt, theta,v1,v2)
 %% Inputs
 % x_i_g_i - 10 x 1 vector of x1, y1, z1, bias 1, bias rate 1, x2, y2, z2, bias 2, bais rate 2 positions in ECEF
 % P_i_g_i - 10 x 10 matrix of state uncertainty
@@ -17,7 +17,7 @@ N1 = length(pseudoranges1);
 N2 = length(pseudoranges2);
 
 %% Dynamics update
-x_ip1_g_i = x_i_g_i; %stationary means position isn't changing
+x_ip1_g_i = x_i_g_i+[v1; 0; 0; v2; 0; 0]; %stationary means position isn't changing
 x_ip1_g_i(4) = x_ip1_g_i(4)+dt*x_ip1_g_i(5); %update clock drift
 x_ip1_g_i(9) = x_ip1_g_i(9)+dt*x_ip1_g_i(10); %update clock drift
 F = eye(10); %identity

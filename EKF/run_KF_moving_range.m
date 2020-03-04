@@ -4,7 +4,7 @@ addpath('C:\Users\colip\OneDrive\Documents\MATLAB\GPS\Project\alldata\onyx')
 addpath('C:\Users\colip\OneDrive\Documents\MATLAB\GPS\Project\alldata\samsung')
 
 opt_select_dist = 100; %[20, 50, or 100 yards];
-opt_select_vel = 0; %[0 for stationary, 1 for moving];
+opt_select_vel = 1; %[0 for stationary, 1 for moving];
 init_filt
 %init filt
 
@@ -47,9 +47,10 @@ omega_E = 7.292115000000000e-05;
 % var1 = 20^2*ones(size(var1));
 % var2 = 20^2*ones(size(var2));
 x_i_g_i = x_ip1_g_ip1;
+dt = 1;
 
 P_i_g_i =  diag([60^2 60^2 60^2 50 10^2 60^2 60^2 60^2 50 10^2]);
-Q = diag([0 0 0 10 5^2 0 0 0 10 5^2]);
+Q = diag([0.1 0.1 0.1 10 5^2 0.1 0.1 0.1 10 5^2]);
 R_pseudo = 20^2;
 R_range = 2^2;
 x1_store = zeros(3,min(size(r1,1),size(r2,1))-1);
@@ -84,8 +85,8 @@ for ind=2:min(size(r1,1),size(r2,1));
     
     %call filter
     dt = 1;
-    [x_ip1_g_ip1, P_ip1_g_ip1] = Stationary_KF_v2(x_i_g_i, P_i_g_i, pseudoranges1, pseudoranges2, sat_pos_t1, sat_pos_t2, range,Q,R,dt);
-    
+    [x_ip1_g_ip1, P_ip1_g_ip1] = moving_KF_range(x_i_g_i, P_i_g_i, pseudoranges1, pseudoranges2, sat_pos_t1, sat_pos_t2, range,Q,R, dt,v1(:,ind), v2(:,ind));
+
     P(ind-1) = (trace(P_ip1_g_ip1));
     x_i_g_i=x_ip1_g_ip1;
     P_i_g_i=P_ip1_g_ip1;
@@ -95,6 +96,9 @@ for ind=2:min(size(r1,1),size(r2,1));
     [l2_store(1,ind-1),l2_store(2,ind-1),l2_store(3,ind-1)] = ECEF_to_LLA(x_i_g_i(6),x_i_g_i(7),x_i_g_i(8));
 
 end
+
+l1_store = l1_store(:,1:(end-1));
+l2_store = l2_store(:,1:(end-1));
 
 figure()
 plot(1:length(x1_store),x1_store(1,:),1:length(x1_store),x2_store(1,:))
@@ -117,7 +121,7 @@ ylabel('Longitude')
 xlabel('Latitude')
 
 figure()
-plot(1:length(x1_store),l1_store(3,:),1:length(x1_store),l2_store(3,:))
+plot(1:length(l1_store),l1_store(3,:),1:length(l2_store),l2_store(3,:))
 ylabel('height (m)')
 xlabel('Time')
 set(gca,'FontSize',20);

@@ -1,64 +1,31 @@
 clear all
 close all
 
+theta = 134;
+
+opt_select_dist = 100; %[20, 50, or 100 yards];
+opt_select_vel = 0; %[0 for stationary, 1 for moving];
+init_filt
+%init filt
+
+% rotation rate of earth
+omega_E = 7.292115000000000e-05;
 %% true samsung   20   50    100
 % lat             37.42983
 % long           -122.159822
-%% load data
-% % % % %check that svids match?
-% % % % sat_pos_ECEF_phone1 = load('gnss_log_2020_02_05_09_09_49onyxsatposecef.mat');
-% % % % sat_pos_ECEF_phone2 =load('gnss_log_2020_02_05_09_07_20satposecef.mat');
-% % % % 
-% % % % sat_pos = sat_pos_ECEF_phone1.svPoss;
-% % % % sat_pos2 = sat_pos_ECEF_phone2.svPoss;
-% % % % % sat_pos = sat_pos(:,2:4).';
-% % % % 
-% % % % range = 50*0.9144; %yard to m
-% % % % range_phone1 = load('gnss_log_2020_02_05_09_09_49onyxranges.mat');
-% % % % r1 = range_phone1.pseudoranges(1:end,:)+squeeze(sat_pos(1:end,:,4));
-% % % % 
-% % % % 
-% % % % range_phone2 =load('gnss_log_2020_02_05_09_07_20ranges.mat');
-% % % % r2 = range_phone2.pseudoranges(1:end,:)+squeeze(sat_pos2(1:end,:,4));
 
-%check that svids match?
-sat_pos_ECEF_phone1 = load('gnss_log_2020_02_05_09_14_15onyxsatposecef.mat');
-sat_pos_ECEF_phone2 =load('gnss_log_2020_02_05_09_11_46satposecef.mat');
 
-sat_pos = sat_pos_ECEF_phone1.svPoss;
-sat_pos2 = sat_pos_ECEF_phone2.svPoss;
-% sat_pos = sat_pos(:,2:4).';
-
-range = 100*0.9144; %yard to m
-theta = 134;
-range_phone1 = load('gnss_log_2020_02_05_09_14_15onyxranges.mat');
-r1 = range_phone1.pseudoranges(1:end,:)+squeeze(sat_pos(1:end,:,4))+3e8*squeeze(sat_pos(1:end,:,5));
-for ind=1:size(r1,2)
-    temp = r1(3:end,ind)-r1(2:(end-1),ind);
-    diff(ind)=max(temp)-min(temp);
-end
-
-range_phone2 =load('gnss_log_2020_02_05_09_11_46ranges.mat');
-r2 = range_phone2.pseudoranges(1:end,:)+squeeze(sat_pos2(1:end,:,4))+3e8*squeeze(sat_pos2(1:end,:,5));
-for ind=1:size(r2,2)
-    temp = r2(3:end,ind)-r2(2:(end-1),ind);
-    diff2(ind)=max(temp)-min(temp);
-end
 
 %% initialize
-% x_i_g_i = [-2699.293e3 -4293.079e3 3855.401e3 -2699.287e3 -4293.066e3 3855.411e3].';
-% x_i_g_i = [-2699.293e3 -4293.079e3 3855.401e3 -2699.305e3 -4293.053e3 3855.423e3].';
-% x_i_g_i = [-2700.586e3 -4293.8877e3 3855.539e3 -8.091337712200282e+03 -187.34 -2700.596e3 -4293.9000e3 3855.541e3 -4.149330610297170e+04 14.58].';
-%50 yard x_i_g_i = [-2631215.508625 -4238492.600300 3813014.543814 8091.337712 -187.34 -2598935.545282 -4175499.243043 3823271.020053 41493.306103 14.58].';
-%100 yard 
-x_i_g_i = [-2699330.224128 -4293121.629632 3855414.542616 16.361894 -187.34 -2699364.125069 -4293082.244246 3855458.735570 48.291727 14.58].';
-% x_i_g_i = [-23598746.57 4499231.45 3855.1e3 -13598746.57 4499231.45 3855.1e3].';
+% var1 = 20^2*ones(size(var1));
+% var2 = 20^2*ones(size(var2));
+x_i_g_i = x_ip1_g_ip1;
 
-P_i_g_i =  diag([600^2 600^2 600^2 50 100^2 600^2 600^2 600^2 50 100^2]);
+P_i_g_i =  diag([60^2 60^2 60^2 50 10^2 60^2 60^2 60^2 50 10^2]);
 Q = diag([0 0 0 10 5^2 0 0 0 10 5^2]);
 R_pseudo = 20^2;
 R_range = 2^2;
-R_theta = 2^2;
+R_theta = 1^2;
 x1_store = zeros(3,min(size(r1,1),size(r2,1))-1);
 x2_store = x1_store;
 l1_store = x1_store;
@@ -85,7 +52,7 @@ for ind=2:min(size(r1,1),size(r2,1));
     pseudoranges2 = rt_phone2;
     
     %adjust R to match measurement size
-    R = diag([R_range R_theta (0.5*diff(notnan_id_r1)).^2 (0.5*diff2(notnan_id_r2)).^2]);
+    R = diag([R_range R_theta var1(notnan_id_r1) var2(notnan_id_r2)]);
 %     R = diag([R_range R_pseudo*ones(1,length(rt_phone1)+length(rt_phone2))]);
     
     %call filter
@@ -130,13 +97,16 @@ figure()
 plot(1:length(x1_store),l1_store(3,:),1:length(x1_store),l2_store(3,:))
 ylabel('height (m)')
 xlabel('Time')
+set(gca,'FontSize',20);
 
 figure()
 plot(1:length(l1_store(1,:)),l1_store(1,:),1:length(l2_store(1,:)),l2_store(1,:))
 xlabel('Time')
-ylabel('Lat')
+ylabel('\phi (deg)')
+set(gca,'FontSize',20);
 
 figure()
 plot(1:length(l1_store(1,:)),l1_store(2,:),1:length(l2_store(2,:)),l2_store(2,:))
 xlabel('Time')
-ylabel('Long')
+ylabel('\lambda (deg)')
+set(gca,'FontSize',20);
