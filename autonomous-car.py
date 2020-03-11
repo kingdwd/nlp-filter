@@ -14,7 +14,6 @@ import utils.ekf as ekf
 import utils.data as data_utils
 import utils.leastsquares as ls
 import utils.vehicle_sim as vehicle_sim
-import pdb
 
 def discrete_vehicle_dynamics(x, u, params=None, jac=False):
     """ Discretizing using explicit Euler

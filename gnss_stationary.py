@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 import nlp.nlp as nlp
 import nlp.dynamics as dynamics
@@ -7,9 +8,13 @@ import nlp.constraints as constraints
 import nlp.simulate as simulate
 import nlp.measurements as measurements
 import utils.gnss as gnss
+import utils.leastsquares as ls
 import utils.utils as utils
 import utils.ekf as ekf
 import utils.data as data_utils
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+data_path = os.path.join(dir_path, 'data/gnss_stationary')
 
 Q = np.diag([0.0001, 0.0001, 0.0001, 0.1, 0.001]) # covariance for dynamics
 r_pr = 100 # covariance for pseudorange measurement
@@ -26,7 +31,7 @@ dt = 1
 T = 50
 t = np.linspace(0, T, T + 1)
 u = np.zeros((3, T + 1))
-data = data_utils.load_gnss_logs('./data/gnss_stationary/gnss_log_2020_02_05_09_14_15')
+data = data_utils.load_gnss_logs(data_path + '/gnss_log_2020_02_05_09_14_15')
 
 # Compute iterative least squares solutions
 LS = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
@@ -34,15 +39,15 @@ LS = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
       "lat":np.zeros(T+1), "lon":np.zeros(T+1), "h":np.zeros(T+1)}
 for k in range(T+1):
     # Solve least squares
-    p_ECEF, b = gnss.iterativeLeastSquares(data["sat_pos"][k], data["pr"][k])
+    p_ECEF, b = ls.iterativeLeastSquares(data["sat_pos"][k], data["pr"][k])
     p_ENU = utils.ecef2enu(p_ECEF, p_ref_ECEF)
     p_LLA = utils.ecef2lla(p_ECEF)
     LS["x_ENU"][k] = p_ENU[0]
     LS["y_ENU"][k] = p_ENU[1]
     LS["z_ENU"][k] = p_ENU[2]
     LS["lat"][k] = p_LLA[0]
-    LS["lon"][k] = p_LLA[0]
-    LS["h"][k] = p_LLA[0]
+    LS["lon"][k] = p_LLA[1]
+    LS["h"][k] = p_LLA[2]
     LS["bias"][k] = b
 
 
@@ -56,7 +61,7 @@ for k in range(T+1):
     t_batch = np.hstack((t_batch, [t[k]]*data["pr"][k].shape[0]))
 
 # Solve batch least squares 
-p_ECEF, b0, alpha = gnss.iterativeLeastSquares_multiTimeStep(t_batch, sat_pos_batch, pr_batch)
+p_ECEF, b0, alpha = ls.iterativeLeastSquares_multiTimeStep(t_batch, sat_pos_batch, pr_batch)
 p_ENU = utils.ecef2enu(p_ECEF, p_ref_ECEF)
 p_LLA = utils.ecef2lla(p_ECEF)
 LS_batch = {"t":t, "p_ref_ECEF":p_ref_ECEF,
@@ -71,6 +76,7 @@ EKF = {"t":t, "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(T+1),
 
 # Create EKF object
 bias_rate_guess = (LS["bias"][-1] - LS["bias"][0])/T
+
 xhat0 = np.array([LS["x_ENU"][0], LS["y_ENU"][0], LS["z_ENU"][0], LS["bias"][0], bias_rate_guess]) # initialize estimate using Least squares solution
 P0 = np.diag([1, 1, 1, 1, 1]) # initialize covariance
 ekf_filter = ekf.EKF(gnss.gnss_pos_and_bias, gnss.multi_pseudorange, xhat0, P0)
@@ -109,7 +115,8 @@ xhat0 = np.vstack((EKF["x_ENU"].reshape(1,-1),
 problem.initializeEstimate(X, t, xhat0)
 
 # Define system dynamics
-problem.addDynamics(dynamics.gnss_pos_and_bias, X, t, u, np.linalg.inv(Q))
+U, W = problem.addDynamics(dynamics.gnss_pos_and_bias, X, t, u, )
+problem.addDynamicsCost(cost_functions.weighted_l2_norm, W, {"Q":np.linalg.inv(Q)})
 
 # Define cost function, adding measurements individually
 for k in range(T+1):
