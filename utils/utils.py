@@ -1,5 +1,5 @@
 import numpy as np
-import pdb
+
 
 def ecef2lla(p_ECEF):
     """ Converts ECEF coordinates (x, y, z) (meters) to the
@@ -55,10 +55,12 @@ def lla2ecef(p_LLA):
     return np.array([x_E, y_E, z_E])
 
 
-def ecef2enu(p_ECEF, p_ref_ECEF):
+def ecef2enu(p_ECEF, p_ref_ECEF, rotation_only=False):
     """ Transforms the position p_ECEF in ECEF coordinates to the 
     position p_ENU that is written with respect to an ENU coordinate
-    frame at position p_ref_ECEF in ECEF coordinates. """
+    frame at position p_ref_ECEF in ECEF coordinates. 
+
+    Use rotation_only = True if you want to transform velocities. """
 
     # Compute reference position in LLA coordinates
     p_LLA = ecef2lla(p_ref_ECEF)
@@ -76,7 +78,10 @@ def ecef2enu(p_ECEF, p_ref_ECEF):
     R[2,1] = np.cos(lat)*np.sin(lon)
     R[2,2] = np.sin(lat)
 
-    return np.matmul(R, p_ECEF - p_ref_ECEF)
+    if rotation_only:
+        return np.matmul(R, p_ECEF)
+    else:
+        return np.matmul(R, p_ECEF - p_ref_ECEF)
 
 
 def enu2ecef(p_ENU, p_ref_ECEF):
@@ -97,6 +102,12 @@ def enu2ecef(p_ENU, p_ref_ECEF):
     R[2,2] = np.sin(lat)
 
     return np.matmul(R, p_ENU) + p_ref_ECEF
+
+
+def get_time_indices(t, t0, tf):
+    """ Computes indices of t array that t[i] lie in
+    the interval [t0, tf] """
+    return np.where((t >= t0) & (t <= tf))[0]
 
 
 if __name__ == '__main__':

@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.io import loadmat
-import pdb
+import pickle
 
 C = 299792458 # speed of light in m/s
+
 
 def load_gnss_logs(prefix):
     """ Loads prefix + 'satposecef.mat' and
@@ -14,29 +15,30 @@ def load_gnss_logs(prefix):
     ion_correction = sat_data["svPoss"][1:,:,3] # meters
     sat_clock_bias = sat_data["svPoss"][1:,:,4] # seconds
 
-
     # Load data and correct for ionosphere and satellite clock bias
     pr_data = loadmat(prefix + 'ranges.mat')
     if pr_data["pseudoranges"].ndim == 2:
         all_pr = pr_data["pseudoranges"][1:,:] + ion_correction + C*sat_clock_bias
         sats = pr_data["pseudoranges"][0,:] # satellite SVID
         pos_only = True
+        print('Assuming data at 1 Hz')
+        times = range(all_pr.shape[0])
 
     elif pr_data["pseudoranges"].ndim == 3:
         all_pr = pr_data["pseudoranges"][1:,:,0] + ion_correction + C*sat_clock_bias
         all_pr_rate = pr_data["pseudoranges"][1:,:,1]
-        all_sat_vel = pr_data["pseudoranges"][1:,:,2:]
+        all_sat_vel = pr_data["pseudoranges"][1:,:,2:5]
+        times = np.max(pr_data["pseudoranges"][1:,:,5], axis=1)
         sats = pr_data["pseudoranges"][0,:,0] # satellite SVID
         pos_only = False
 
     # Parse the data by time step and remove all invalid data (NaN)
     T, N = all_pr.shape
-    times = range(T)
     sat_pos = []
     sat_vel = []
     pr = []
     pr_rate = []
-    for t in times:
+    for t in range(T):
         # Only take measurements that are not NaN
         sat_pos_t = np.array([]).reshape(0,3)
         sat_vel_t = np.array([]).reshape(0,3)
@@ -66,3 +68,17 @@ def load_gnss_logs(prefix):
         data["pr_rate"] = pr_rate
 
     return data
+
+
+def load_px4_logs(prefix):
+    return load_obj(prefix)
+
+
+def save_obj(obj, fname):
+    with open(fname + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+def load_obj(fname):
+    with open(fname + '.pkl', 'rb') as f:
+        return pickle.load(f)
