@@ -54,6 +54,7 @@ class NLP(object):
 
         # Create an NLP solver
         # p_opts = {"ipopt.print_level":0}
+        # p_opts = {"tol":1e-3}
         p_opts = {}
         s_opts = {}
         self.opti.solver("ipopt", p_opts, s_opts)
