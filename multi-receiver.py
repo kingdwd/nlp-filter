@@ -49,46 +49,13 @@ LSbatch_B = ls.runBatchLeastSquares(data_B["t"][idx], [data_B["sat_pos"][i] for 
 
 
 ################################################################
-# Cost matrices for EKF and NLP
+# Cost matrices for NLP
 ################################################################
 Q = np.diag([0.01, 0.01, 0.01, 0.01, 1., 1., 0.01, 0.01]) # covariance for dynamics
-r_pr = 1000 # covariance for pseudorange measurement
-r_prr = 100
-r_range = 0.00001
+r_pr = 100 # covariance for pseudorange measurement
+r_prr = 0.1
+r_range = 0.01
 indices = utils.get_time_indices(data_B["t"], LSbatch_B["t"][-1], data_B["t"][-50])
-
-# ################################################################
-# # EKF
-# ################################################################
-# N_steps = len(indices)
-# EKF = {"t":data_B["t"][indices], "p_ref_ECEF":p_ref_ECEF, "bias":np.zeros(N_steps),
-#       "x_ENU":np.zeros(N_steps), "y_ENU":np.zeros(N_steps), "z_ENU":np.zeros(N_steps),
-#       "lat":np.zeros(N_steps), "lon":np.zeros(N_steps), "h":np.zeros(N_steps)}
-
-# # Create EKF object
-# xhat0 = np.array([LSbatch_B["x_ENU"], LSbatch_B["y_ENU"], LSbatch_B["z_ENU"], LSbatch_B["b0"], LSbatch_B["alpha"]]) # initialize estimate using Least squares solution
-# P0 = np.diag([1, 1, 1, 1, 1]) # initialize covariance
-# ekf_filter = ekf.EKF(gnss.gnss_pos_and_bias, gnss.multi_pseudorange, xhat0, P0)
-
-# # Run EKF
-# for (k, i) in enumerate(indices):
-#     EKF["x_ENU"][k] = ekf_filter.mu[0]
-#     EKF["y_ENU"][k] = ekf_filter.mu[1]
-#     EKF["z_ENU"][k] = ekf_filter.mu[2]
-#     EKF["bias"][k] = ekf_filter.mu[3]
-
-#     # Convert satellite positions to ENU coordinates
-#     sat_pos_i = np.array([]).reshape(0,3)
-#     for j in range(data_B["sat_pos"][i].shape[0]):
-#         sat_pos_ENU = utils.ecef2enu(data_B["sat_pos"][i][j,:], p_ref_ECEF)
-#         sat_pos_i = np.vstack((sat_pos_i, sat_pos_ENU.reshape((1,3))))
-
-#     # Update EKF using measurement and control
-#     u_i = np.array([LS_B["xd_ENU"][i+1], LS_B["yd_ENU"][i+1], LS_B["zd_ENU"][i+1]])
-#     R = np.diag(r_pr*np.ones(data_B["pr"][i].shape[0]))
-#     dt = LS_B["t"][i+1] - LS_B["t"][i]
-#     ekf_filter.update(u_i, data_B["pr"][i], Q, R, dyn_func_params={"dt":dt}, meas_func_params={"sat_pos":sat_pos_i})
-
 
 ################################################################
 # NLP
@@ -130,7 +97,7 @@ for (k, i) in enumerate(indices):
             
     Rrange_ij = np.diag([r_range])
     yrange_ij = np.array([[2.4384]])
-    problem.addResidualCost(measurements.multi_receiver_range, XB, t_i, yrange_ij, np.linalg.inv(Rrange_ij), {"y":XA})
+    problem.addResidualCost(measurements.multi_receiver_range_2d, XB, t_i, yrange_ij, np.linalg.inv(Rrange_ij), {"y":XA})
 
 
 # Solve problem
@@ -173,7 +140,6 @@ plt.figure(1)
 # plt.scatter(LSmean_A["x_ENU"], LSmean_A["y_ENU"], c='r', marker='x', label='LS_A')
 # plt.scatter(LS_B["x_ENU"], LS_B["y_ENU"], c='r', marker='o', label='LS_B')
 plt.scatter(LSbatch_B["x_ENU"], LSbatch_B["y_ENU"], c='k', marker='s', label='Batch LS_B')
-# plt.scatter(EKF["x_ENU"], EKF["y_ENU"], c='g', marker='d', label='EKF')
 plt.scatter(NLP["x_ENU"], NLP["y_ENU"], c='b', marker='o', label='NLP')
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
@@ -182,7 +148,6 @@ plt.legend()
 plt.figure(2)
 # plt.plot(LS_B["t"], LS_B["x_ENU"], c='r', label='x (LS)')
 plt.plot(LSbatch_B["t"], LSbatch_B["x_ENU"]*np.ones(LSbatch_B["t"].shape), c='k', label='x (Batch LS)')
-# plt.plot(EKF["t"], EKF["x_ENU"], c='g', label='x (EKF)')
 plt.plot(NLP["t"], NLP["x_ENU"], c='b', label='x (NLP)')
 plt.xlabel('t (s)')
 plt.ylabel('x (m)')
@@ -191,7 +156,6 @@ plt.legend()
 plt.figure(3)
 # plt.plot(LS_B["t"], LS_B["y_ENU"], c='r', label='y (LS)')
 plt.plot(LSbatch_B["t"], LSbatch_B["y_ENU"]*np.ones(LSbatch_B["t"].shape), c='k', label='y (Batch LS)')
-# plt.plot(EKF["t"], EKF["y_ENU"], c='g', label='y (EKF)')
 plt.plot(NLP["t"], NLP["y_ENU"], c='b', label='y (NLP)')
 plt.xlabel('t (s)')
 plt.ylabel('y (m)')
@@ -209,8 +173,4 @@ plt.legend()
 
 
 plt.show()
-
-pdb.set_trace()
-
-
 

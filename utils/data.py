@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.io import loadmat
 import pickle
+import pdb
 
 C = 299792458 # speed of light in m/s
 
@@ -21,14 +22,18 @@ def load_gnss_logs(prefix):
         all_pr = pr_data["pseudoranges"][1:,:] + ion_correction + C*sat_clock_bias
         sats = pr_data["pseudoranges"][0,:] # satellite SVID
         pos_only = True
-        print('Assuming data at 1 Hz')
+        print('Assuming data at 1 Hz with t0 = 0')
         times = range(all_pr.shape[0])
 
     elif pr_data["pseudoranges"].ndim == 3:
         all_pr = pr_data["pseudoranges"][1:,:,0] + ion_correction + C*sat_clock_bias
         all_pr_rate = pr_data["pseudoranges"][1:,:,1]
         all_sat_vel = pr_data["pseudoranges"][1:,:,2:5]
-        times = np.max(pr_data["pseudoranges"][1:,:,5], axis=1)
+        if pr_data["pseudoranges"].shape[2] == 6:
+            times = np.max(pr_data["pseudoranges"][1:,:,5], axis=1)
+        else:
+            print('Assuming data at 1 Hz with t0 = 0')
+            times = range(all_pr.shape[0])
         sats = pr_data["pseudoranges"][0,:,0] # satellite SVID
         pos_only = False
 

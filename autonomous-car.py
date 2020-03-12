@@ -246,7 +246,7 @@ for (step, t0) in enumerate(compute_times):
     for i in range(N_gnss + 1):
         i_gnss = gnss_indices[i]
         t_i = np.array([[t_gnss[i]]])
-        N_sat_i = data_gnss["sat_pos"][i].shape[0]
+        N_sat_i = data_gnss["sat_pos"][i_gnss].shape[0]
         for j in range(N_sat):
             # Not every time step will have N_sat measurements, so set some costs to 0
             if j < N_sat_i:

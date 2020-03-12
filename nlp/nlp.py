@@ -49,13 +49,16 @@ class NLP(object):
     def setParameter(self, p, val):
         self.opti.set_value(p, val)
 
-    def build(self, verbose=True):
+    def setObjective(self):
         self.opti.minimize(self.J)
 
+    def build(self, verbose=True):
+        self.setObjective()
+
         # Create an NLP solver
-        # p_opts = {"ipopt.print_level":0}
+        p_opts = {"ipopt.print_level":0}
         # p_opts = {"tol":1e-3}
-        p_opts = {}
+        # p_opts = {}
         s_opts = {}
         self.opti.solver("ipopt", p_opts, s_opts)
 

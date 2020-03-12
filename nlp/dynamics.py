@@ -95,6 +95,25 @@ def multi_receiver(x, params=None):
         0.0,
         )
 
+def gnss_two_receiver(x, u, params=None):
+    """ x = [xA, yA, zA, bA, alphaA, xB, yB, zB, bB, alphaB]
+    where b is receiver clock bias that is assumed to be linearly 
+    changing at rate alpha
+    Dynamics: xdot = xd and bdot = alpha
+    """
+    return vertcat(
+        u[0],
+        u[1],
+        u[2],
+        x[4],
+        0.0,
+        u[3],
+        u[4],
+        u[5],
+        x[9],
+        0.0,
+        )
+
 def kinematic_bycicle_and_bias(x, u, params=None):
     """ kinematic bycicle model: x = [x, y, z, b, bd, th], u = [throttle, steer]
         xd = vcos(th)

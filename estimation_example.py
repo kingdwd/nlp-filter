@@ -31,7 +31,8 @@ X = problem.addVariables(N+1, 2, name='x')
 
 # Define system dynamics
 Q = np.diag([0.0001, 0.0001])
-problem.addDynamics(dynamics.single_integrator_2D, X, t, u, np.linalg.inv(Q))
+_, W = problem.addDynamics(dynamics.single_integrator_2D, X, t, u)
+problem.addDynamicsCost(cost_functions.weighted_l2_norm, W, {"Q":np.linalg.inv(Q)})
 
 # Define cost function
 problem.addResidualCost(measurements.full_state, X, t, y, np.linalg.inv(R))
