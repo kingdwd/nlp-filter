@@ -41,13 +41,14 @@ data_utils.save_obj(LS_B, data_path + '/filtering/leastsquaresB')
 ################################################################
 # Cost
 Q = np.diag([.01, .01, .01, 0.01, 0.01, .01, .01, .01, 0.01, 0.01])
-P = np.diag([1, 1, 1, 0.1, 0.1, 100, 100, 100, 0.1, 0.1])
+P = 0.01*np.diag([1, 1, 1, 0.1, 0.1, 1, 1, 1, 0.1, 0.1])
 r_pr_A = 10
 r_pr_B = 1
 r_range = 0.01
+r_heading = 0.1
 
 # Time horizon and problem definition
-T = 10 # finite time horizon for NLP, seconds
+T = 5 # finite time horizon for NLP, seconds
 N = 10
 n = 10 # state is x = [xA, yA, zA, bA, alphaA, xB, yB, zB, bB, alphaB]
 m = 6 # control is u = [vxA, vyA, vzA, vxB, vyB, vzB]
@@ -63,13 +64,27 @@ problem.addDynamicsCost(cost_functions.weighted_l2_norm, W, {"Q":np.linalg.inv(Q
 X0 = problem.addInitialCost(cost_functions.weighted_l2_norm, X[0], {"Q":np.linalg.inv(P)})
 
 # Add range measurement
-distance = 0.5*91.44 # meters (100 yards)
+distance = 0.5*91.44 # meters (50 yards)
 dt_range = 0.1 # seconds
 N_range = int(np.floor(T/dt_range))
 t_range = np.linspace(0, T, N_range + 1)
 y_range = distance*np.ones((1, t_range.shape[0]))
-problem.addResidualCost(measurements.multi_receiver_range_2d, X, t_range, y_range, 
-                                dt_range*np.array([1./r_range]), {"idxA":[0, 1], "idxB":[5, 6]})
+problem.addResidualCost(measurements.multi_receiver_range_3d, X, t_range, y_range, 
+                                dt_range*np.array([1./r_range]), {"idxA":[0, 1, 2], "idxB":[5, 6, 7]})
+
+# Add zA = zB constraint
+for i in range(N + 1):
+    args = [X[i][2], X[i][7]]
+    problem.addEqConstraint(constraints.equality_constaint, args)
+
+# Add heading measurement
+heading = -44 # degrees, counterclockwise from East
+dt_heading = 0.1 # seconds
+N_heading = int(np.floor(T/dt_heading))
+t_heading = np.linspace(0, T, N_heading + 1)
+y_heading = np.deg2rad(heading)*np.ones((1, t_heading.shape[0]))
+problem.addResidualCost(measurements.multi_receiver_heading_2d, X, t_heading, y_heading, 
+                                dt_heading*np.array([1./r_heading]), {"idxA":[0, 1], "idxB":[5, 6]})
 
 # Add costs for the pseudorange measurements at sampling frequency
 dt_gnss = 1

@@ -46,6 +46,12 @@ class NLP(object):
 
         return P
 
+    def addIneqConstraint(self, g, arguments, params=None):
+        self.opti.subject_to(g(arguments, params) <= 0)
+
+    def addEqConstraint(self, h, arguments, params=None):
+        self.opti.subject_to(h(arguments, params) == 0)
+
     def setParameter(self, p, val):
         self.opti.set_value(p, val)
 

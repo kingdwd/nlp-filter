@@ -17,15 +17,19 @@ save_path = os.path.join(dir_path, 'figures')
 
 LS_A = load_obj(data_path + '/leastsquaresA')
 LS_B = load_obj(data_path + '/leastsquaresB')
-# EKF = load_obj(data_path + '/ekf')
 NLP = load_obj(data_path + '/nlp')
 
 # Compute distances
 d = np.zeros(len(NLP["t"]))
+th = np.zeros(len(NLP["t"]))
 for (i, t) in enumerate(NLP["t"]):
     pA = np.array([NLP["xA_ENU"][i], NLP["yA_ENU"][i]])
     pB = np.array([NLP["xB_ENU"][i], NLP["yB_ENU"][i]])
-    d[i] = np.linalg.norm(pA-pB)
+    r = pB - pA
+    d[i] = np.linalg.norm(r)
+    th[i] = np.arctan2(r[1], r[0])
+
+pdb.set_trace()
 
 with open('LS_A.csv', mode='w') as f:
     writer = csv.writer(f, delimiter=',')
@@ -52,15 +56,42 @@ print('NLP mean time: {}'.format(np.mean(NLP["t_solve"])))
 
 # Plotting
 plt.figure(1)
-plt.scatter(LS_A["x_ENU"][10:], LS_A["y_ENU"][10:], c='m', label='LS, Rec. A', s=1)
-plt.scatter(LS_B["x_ENU"][10:], LS_B["y_ENU"][10:], c='m', label='LS, Rec. B', s=1)
+plt.scatter(LS_A["x_ENU"], LS_A["y_ENU"], c='m', label='LS, Rec. A', s=1)
+plt.scatter(LS_B["x_ENU"], LS_B["y_ENU"], c='m', label='LS, Rec. B', s=1)
 plt.plot(NLP["xA_ENU"], NLP["yA_ENU"], c='k', label='NLP, Rec. A')
 plt.plot(NLP["xB_ENU"], NLP["yB_ENU"], c='k', label='NLP, Rec. B')
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.legend()
 plt.axis('equal')
-plt.savefig(save_path + '/comparison.png', format='png', dpi=1000)
+# plt.savefig(save_path + '/comparison.png', format='png', dpi=1000)
+
+plt.figure(2)
+plt.scatter(LS_A["t"], LS_A["x_ENU"], c='m', label='LS, Rec. A', s=1)
+plt.scatter(LS_B["t"], LS_B["x_ENU"], c='m', label='LS, Rec. B', s=1)
+plt.plot(NLP["t"], NLP["xA_ENU"], c='k', label='NLP, Rec. A')
+plt.plot(NLP["t"], NLP["xB_ENU"], c='k', label='NLP, Rec. B')
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.legend()
+
+plt.figure(3)
+plt.scatter(LS_A["t"], LS_A["y_ENU"], c='m', label='LS, Rec. A', s=1)
+plt.scatter(LS_B["t"], LS_B["y_ENU"], c='m', label='LS, Rec. B', s=1)
+plt.plot(NLP["t"], NLP["yA_ENU"], c='k', label='NLP, Rec. A')
+plt.plot(NLP["t"], NLP["yB_ENU"], c='k', label='NLP, Rec. B')
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.legend()
+
+plt.figure(4)
+plt.scatter(LS_A["t"], LS_A["z_ENU"], c='m', label='LS, Rec. A', s=1)
+plt.scatter(LS_B["t"], LS_B["z_ENU"], c='m', label='LS, Rec. B', s=1)
+plt.plot(NLP["t"], NLP["zA_ENU"], c='k', label='NLP, Rec. A')
+plt.plot(NLP["t"], NLP["zB_ENU"], c='k', label='NLP, Rec. B')
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.legend()
 
 plt.show()
 

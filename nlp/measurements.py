@@ -1,5 +1,5 @@
 import numpy as np
-from casadi import vertcat, sin, cos, tan, sqrt, dot, norm_2
+from casadi import vertcat, sin, cos, tan, sqrt, dot, norm_2, atan2
 
 def full_state(x, params=None):
     return x
@@ -18,6 +18,23 @@ def multi_receiver_range_2d(x, params=None):
         y = sqrt((x[idxA[0]] - x[idxB[0]])**2 +
                     (x[idxA[1]] - x[idxB[1]])**2 + .000001)
     return y
+
+def multi_receiver_heading_2d(x, params=None):
+    """ Computes the heading of (Receiver B/Object) with respect to
+    Receiver A """
+    if "y" in params:
+        if "idx" not in params:
+            idx = [0, 1]
+        else:
+            idx = params["idx"]
+        r_y = params["y"][1] - x[idx[1]]
+        r_x = params["y"][0] - x[idx[0]]
+    elif "idxA" in params and "idxB" in params:
+        idxA = params["idxA"]
+        idxB = params["idxB"]
+        r_y = x[idxB[1]] - x[idxA[1]]
+        r_x = x[idxB[0]] - x[idxA[0]] + .00001
+    return atan2(r_x, r_y)
 
 def multi_receiver_range_3d(x, params=None):
     if "y" in params:

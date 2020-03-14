@@ -1,5 +1,6 @@
-import pdb
 import numpy as np
+import pdb
 
-def equalityConstaint(x, val, params=None):
-    return x - val
+def equality_constaint(x, params=None):
+    return x[0] - x[1]
+
