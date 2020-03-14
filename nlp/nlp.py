@@ -1,9 +1,9 @@
 import casadi
 import numpy as np
 from scipy.interpolate import interp1d
-import pdb
 import collocation
 import constraints
+
 
 class NLP(object):
     """NLP class"""
@@ -33,7 +33,6 @@ class NLP(object):
                 self.opti.subject_to(x >= lb)
             if ub is not None:
                 self.opti.subject_to(x <= ub)
-
         return X
 
     def addParameter(self, N_var, n_var, val=None):
@@ -50,11 +49,16 @@ class NLP(object):
     def setParameter(self, p, val):
         self.opti.set_value(p, val)
 
-    def build(self, verbose=True):
+    def setObjective(self):
         self.opti.minimize(self.J)
+
+    def build(self, verbose=True):
+        self.setObjective()
 
         # Create an NLP solver
         p_opts = {"ipopt.print_level":0}
+        # p_opts = {"tol":1e-3}
+        # p_opts = {}
         s_opts = {}
         self.opti.solver("ipopt", p_opts, s_opts)
 
@@ -189,21 +193,24 @@ class fixedTimeOptimalEstimationNLP(NLP):
         # Initialize cost
         self.J = 0
 
-    def addDynamics(self, func, X, t_array, u_array, Q, params=None):
+    def addDynamics(self, func, X, t_array=None, u_array=None, params=None):
         """ Adds dynamics constraints to the NLP where the dynamics are defined
         in the func function and the state dimension is n and control
         dimension is m. The argument u_array is the array of dimension (m by *) of the controls
         that were applied to the system from time 0 to T """
         if len(X) != self.N + 1:
             print('X must have N+1 points defined.')
-
-        # Define a Casadi function
+        
+        # Define parameters for the control u at each point and a Casadi function
         xvar = casadi.MX.sym('x', self.n)
-        uvar = casadi.MX.sym('u', self.m)
-        fdynamics = casadi.Function('f', [xvar, uvar], [func(xvar, uvar, params)])
-
-        # Define interpolation function for the control u
-        u_t = interp1d(t_array, u_array, fill_value="extrapolate")
+        if self.m != 0:
+            uvar = casadi.MX.sym('u', self.m)
+            fdynamics = casadi.Function('f', [xvar, uvar], [func(xvar, uvar, params)])
+            U = self.addParameter(self.N + 1, self.m)
+        else:
+            print('No control input being used for dynamics.')
+            fdynamics = casadi.Function('f', [xvar], [func(xvar, params)])
+            U = None
 
         # Define process noise variables
         W = self.addVariables(self.N + 1, self.n, name='w')
@@ -215,18 +222,37 @@ class fixedTimeOptimalEstimationNLP(NLP):
             for j in range(self.N + 1):
                 d_k += self.CPM.D[k, j]*X[j]
             # Append collocation equations to constraint dynamics
-            self.opti.subject_to(W[k] + fdynamics(X[k], u_t(self.CPM.tau2t(self.CPM.tau[k]))) == (2.0/self.T)*d_k)
+            if U is not None:
+                f = fdynamics(X[k], U[k])
+            else:
+                f = fdynamics(X[k])
+            self.opti.subject_to(W[k] + f == (2.0/self.T)*d_k)
 
-            # Weight process noise variables with w^T*Q*w
-            self.J += casadi.mtimes(W[k].T, casadi.mtimes(Q, W[k]))
+        if u_array is not None:
+            self.setControl(U, t_array, u_array)
+
+        return U, W
+
+    def addDynamicsCost(self, cost_function, W, params=None):
+        """ Adds a cost function int_0^T m(X) dt """
+        for k in range(self.N + 1):
+            self.J += (self.T/2.)*self.CPM.w[k]*cost_function(W[k], params)
 
     def addResidualCost(self, measurement_model, X, t_array, y_array, R, params=None):
-        p = y_array.shape[0]
+        N_measurements = t_array.shape[0]
+
+        if y_array is not None:
+            p = y_array.shape[0]
+        else:
+            p = params["p"]
 
         # Define Casadi function
         x = casadi.MX.sym('x', self.n)
         y = casadi.MX.sym('y', p)
         residual = casadi.Function('l', [x, y], [y - measurement_model(x, params)])
+
+        # Measurment parameters
+        Y = self.addParameter(N_measurements, p)
 
         # Define stage cost
         for (i, t) in enumerate(t_array):
@@ -237,8 +263,21 @@ class fixedTimeOptimalEstimationNLP(NLP):
                 X_t += X[j]*phi_t[j]
 
             # Then add to the cost
-            r_t = residual(X_t, y_array[:,i])
+            r_t = residual(X_t, Y[i])
             self.J += casadi.mtimes(r_t.T, casadi.mtimes(R, r_t))
+
+        if y_array is not None:
+            self.setMeasurement(Y, t_array, y_array)
+        return Y
+
+    def addInitialCost(self, cost_function, X0, params=None, x0=None):
+        """ Adds a cost p(x0, theta) """
+        x0_guess = self.addParameter(1, self.n)[0]
+        self.J += cost_function(X0 - x0_guess, params)
+
+        if x0 is not None:
+            self.setParameter(x0_guess, x0)
+        return x0_guess
 
     def initializeEstimate(self, X, t_array, xhat_array):
         """ Takes an solution characterized by t_array (T,) and
@@ -255,3 +294,18 @@ class fixedTimeOptimalEstimationNLP(NLP):
         # Initialize estimate
         for (i, x) in enumerate(X):
             self.initialGuess(x, xhat_nodes[:,i])
+
+    def setControl(self, U, t_array, u_array):
+        # Define interpolation function for the control u
+        u_t = interp1d(t_array, u_array, fill_value="extrapolate")
+        for k in range(self.N + 1):
+            self.setParameter(U[k], u_t(self.CPM.tau2t(self.CPM.tau[k])))
+
+    def setMeasurement(self, Y, t_array, y_array):
+        for (i, t) in enumerate(t_array):
+            self.setParameter(Y[i], y_array[:,i])
+
+    def addVarBounds(self, X, idx, lb, ub):
+        for x in X:
+            self.opti.subject_to(x[idx] <=  ub)
+            self.opti.subject_to(x[idx] >=  lb)

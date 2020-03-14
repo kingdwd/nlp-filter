@@ -1,8 +1,7 @@
 import numpy as np
 from scipy.integrate import ode
 from scipy.interpolate import interp1d
-import pdb
-import dynamics
+
 
 def dynamics_wrapper(t, x, func, u, params=None):
     # u = np.zeros(2)
@@ -30,8 +29,9 @@ def open_loop_sim(t, u, x0, func, params=None):
         dt = t[i+1] - t[i]
         i += 1
         x[:,i] = r.integrate(r.t + dt)
-        
+
     return x
+
 
 def generate_measurements(x, measurement_model, sigma, params=None):
     """ Given state trajectory history x (n by T), the
