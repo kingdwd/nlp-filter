@@ -6,8 +6,8 @@ import nlp.nlp as nlp
 import nlp.dynamics as dynamics
 import nlp.cost_functions as cost_functions
 import nlp.constraints as constraints
-import nlp.simulate as simulate
 import nlp.measurements as measurements
+import utils.simulate as simulate
 import utils.gnss as gnss
 import utils.leastsquares as ls
 import utils.utils as utils

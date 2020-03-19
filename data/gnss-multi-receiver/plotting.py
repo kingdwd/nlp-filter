@@ -4,7 +4,6 @@ import numpy as np
 from scipy.interpolate import interp1d
 import os
 import csv
-import pdb
 
 def load_obj(fname):
     with open(fname + '.pkl', 'rb') as f:
@@ -28,8 +27,6 @@ for (i, t) in enumerate(NLP["t"]):
     r = pB - pA
     d[i] = np.linalg.norm(r)
     th[i] = np.arctan2(r[1], r[0])
-
-pdb.set_trace()
 
 with open('LS_A.csv', mode='w') as f:
     writer = csv.writer(f, delimiter=',')
